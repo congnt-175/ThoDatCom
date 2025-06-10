@@ -4,6 +4,7 @@ from discord import app_commands
 import datetime
 import pytz
 import os
+import random
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -115,6 +116,18 @@ async def remind_cuoi_ngay(channel):
 async def remind_sang(channel):
     await channel.send("👀 **Hôm nay có cơm chưa các shop?**")
 
+async def chon_nguoi_di_lay_com(channel):
+    today = str(datetime.datetime.now(tz_vn).date())
+    if today not in orders or len(orders[today]) < 2:
+        await channel.send("😅 Hôm nay chưa đủ người đặt cơm để chọn người đi lấy.")
+        return
+
+    selected = random.sample(orders[today], 2)
+    mentions = [f"<@{o['user_id']}>" for o in selected]
+    await channel.send(
+        f"🥢 **Những người may mắn được chọn ! Tí xuống lấy cơm nhé 2 bác:**\n➡️ {mentions[0]}\n➡️ {mentions[1]}"
+    )
+
 @tasks.loop(minutes=1)
 async def reminder_loop():
     now = datetime.datetime.now(tz_vn)
@@ -127,13 +140,22 @@ async def reminder_loop():
                     await remind_cuoi_ngay(channel)
                 elif now.hour == 10 and now.minute == 30:
                     await remind_sang(channel)
+                elif now.hour == 11 and now.minute == 30:
+                    await chon_nguoi_di_lay_com(channel)
             else:
                 print(f"Không tìm thấy channel tên '{CHANNEL_NAME}' trong guild.")
 
 @bot.event
 async def on_ready():
-    await tree.sync(guild=discord.Object(id=GUILD_ID))
+    guild = discord.Object(id=GUILD_ID)
+    await tree.sync(guild=guild)
+    await tree.sync()
     print(f"✅ Bot đã đăng nhập: {bot.user}")
+    
+    cmds = await tree.fetch_commands(guild=guild)
+    print("📋 Slash Commands đã sync:")
+    for cmd in cmds:
+        print(f" - /{cmd.name}")
     reminder_loop.start()
 
 bot.run(TOKEN)
