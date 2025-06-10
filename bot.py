@@ -107,6 +107,7 @@ async def help_command(interaction: discord.Interaction):
 async def remind_cuoi_ngay(channel):
     today = str(datetime.datetime.now(tz_vn).date())
     if today not in orders or len(orders[today]) == 0:
+        await channel.send("📢 **Sáng nay bot xin nghỉ phép! Các bác chú ý tự giác trả tiền cơm nhé !**")
         return
 
     mentions = "💸 **Đến giờ trả tiền cơm rồi mấy má!**\n"
