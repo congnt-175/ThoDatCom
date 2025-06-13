@@ -6,11 +6,13 @@ import pytz
 import os
 import random
 from dotenv import load_dotenv
+from openai import OpenAI
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID"))
 CHANNEL_NAME = os.getenv("CHANNEL_NAME")
+OPENAI_API_KEY = "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"
 
 tz_vn = pytz.timezone("Asia/Ho_Chi_Minh")
 
@@ -18,6 +20,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 tree = bot.tree
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # orders[date] = list of order dicts
 orders = {}
@@ -45,17 +48,12 @@ async def list_orders(interaction: discord.Interaction):
         return
 
     msg = "🥡 **Danh sách cơm hôm nay:**\n\n"
-    msg += "```"
-    msg += "STT | Tên               | Món\n"
-    msg += "----|-------------------|---------------------\n"
-
     for idx, order in enumerate(orders[today], 1):
-        name = order['name'][:18]
-        items = order['items']
-        msg += f"{str(idx).ljust(4)}| {name.ljust(18)}| {items}\n"
+        msg += f"- {idx}. {order['name']} -🍚- {order['items']}\n\n"
 
-    msg += "```"
     await interaction.response.send_message(msg)
+
+
 
 @tree.command(name="edit_order", description="Sửa món ăn theo STT")
 @app_commands.describe(order_index="Số thứ tự món muốn sửa (STT trong /list)", new_items="Món mới muốn đổi thành")
@@ -145,6 +143,52 @@ async def reminder_loop():
                     await chon_nguoi_di_lay_com(channel)
             else:
                 print(f"Không tìm thấy channel tên '{CHANNEL_NAME}' trong guild.")
+
+chat_history = [
+    {"role": "system", "content": "Bạn là một trợ lý vui tính, trung thành, luôn gọi người dùng là 'ông chủ'."}
+]
+
+MAX_HISTORY = 20  # 👈 Sau 10 lượt thì xóa để tiết kiệm token
+
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+
+    if bot.user.mentioned_in(message):
+        prompt = message.content.replace(f"<@{bot.user.id}>", "").strip()
+        if not prompt:
+            await message.channel.send("❓ Ông chủ muốn hỏi gì nè?")
+            return
+
+        await message.channel.send("🤖 ...")
+
+        try:
+            # Thêm câu hỏi mới vào lịch sử
+            chat_history.append({"role": "user", "content": prompt})
+
+            # Gọi ChatGPT
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=chat_history,
+                temperature=0.7,
+            )
+            reply = response.choices[0].message.content
+
+            # Thêm phản hồi của bot vào lịch sử
+            chat_history.append({"role": "assistant", "content": reply})
+
+            # Giới hạn lịch sử nếu quá dài
+            if len(chat_history) > MAX_HISTORY * 2 + 1:  # +1 vì có system message
+                chat_history[1:] = chat_history[-MAX_HISTORY * 2:]  # giữ system + các lượt mới nhất
+
+            await message.channel.send(reply)
+
+        except Exception as e:
+            await message.channel.send("❌ Lỗi khi gọi ChatGPT: " + str(e))
+
+    await bot.process_commands(message)
+
 
 @bot.event
 async def on_ready():
