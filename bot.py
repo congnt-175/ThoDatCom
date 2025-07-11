@@ -18,6 +18,7 @@ tz_vn = pytz.timezone("Asia/Ho_Chi_Minh")
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 tree = bot.tree
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -38,7 +39,14 @@ async def order(interaction: discord.Interaction, name: str, items: str):
         "user_id": interaction.user.id
     })
 
-    await interaction.response.send_message(f"🍱 **{name}** đã đặt món: `{items}`")
+    # Kiểm tra nếu là anh Đạt (user_id cần đúng)
+    if interaction.user.id == 1372464165234671696:  # 👈 Thay bằng ID thật của anh Đạt nếu khác
+        await interaction.response.send_message(
+            "⚠️ **Kẻ nhịn đói mạnh nhất lịch sử thân mến!**\n"
+            "Đặt cơm sẽ làm bạn yếu đi. Tôi khuyên bạn nên nhịn tiếp !"
+        )
+    else:
+        await interaction.response.send_message(f"🍱 **{name}** đã đặt món: `{items}`")
 
 @tree.command(name="list", description="Xem danh sách cơm hôm nay")
 async def list_orders(interaction: discord.Interaction):
@@ -105,7 +113,7 @@ async def help_command(interaction: discord.Interaction):
 async def remind_cuoi_ngay(channel):
     today = str(datetime.datetime.now(tz_vn).date())
     if today not in orders or len(orders[today]) == 0:
-        await channel.send("📢 **Sáng nay bot xin nghỉ phép! Các bác chú ý tự giác trả tiền cơm nhé !**")
+        await channel.send("📢 **Nay cuối tuần rồi buồng viên nào còn nợ thì tất toán nốt nhé ! **")
         return
 
     mentions = "💸 **Đến giờ trả tiền cơm rồi mấy má!**\n"
@@ -121,11 +129,29 @@ async def chon_nguoi_di_lay_com(channel):
         await channel.send("😅 Hôm nay chưa đủ người đặt cơm để chọn người đi lấy.")
         return
 
-    selected = random.sample(orders[today], 2)
+    guild = channel.guild
+    await guild.chunk()  # Đảm bảo load đủ member
+
+    valid_orders = []
+    for order in orders[today]:
+        member = guild.get_member(order["user_id"])
+        if member:
+            # Chỉ cần role chứa chữ "fuba"
+            has_fuba_role = any("fuba" in role.name.lower() for role in member.roles)
+            if not has_fuba_role:
+                valid_orders.append(order)
+
+    if len(valid_orders) < 2:
+        await channel.send("🚫 Không đủ người đủ điều kiện (không có role chứa 'Fuba') để chọn đi lấy cơm.")
+        return
+
+    selected = random.sample(valid_orders, 2)
     mentions = [f"<@{o['user_id']}>" for o in selected]
     await channel.send(
-        f"🥢 **Những người may mắn được chọn ! Tí xuống lấy cơm nhé 2 bác:**\n➡️ {mentions[0]}\n➡️ {mentions[1]}"
+        f"🥢 **Những người may mắn được chọn! Tí xuống lấy cơm nhé 2 bác:**\n🍚 {mentions[0]}\n🍚 {mentions[1]}"
     )
+
+
 
 @tasks.loop(minutes=1)
 async def reminder_loop():
@@ -145,7 +171,7 @@ async def reminder_loop():
                 print(f"Không tìm thấy channel tên '{CHANNEL_NAME}' trong guild.")
 
 chat_history = [
-    {"role": "system", "content": "Bạn là một trợ lý vui tính, trung thành, luôn gọi người dùng là 'ông chủ'."}
+    {"role": "system", "content": "Bạn là một trợ lý tên 'Thợ đặt cơm' được tạo ra bởi 'anh Kong HR', thẳng thắn, luôn gọi người dùng là 'đại ca' và xưng 'em'."}
 ]
 
 MAX_HISTORY = 20  # 👈 Sau 10 lượt thì xóa để tiết kiệm token
@@ -158,7 +184,7 @@ async def on_message(message):
     if bot.user.mentioned_in(message):
         prompt = message.content.replace(f"<@{bot.user.id}>", "").strip()
         if not prompt:
-            await message.channel.send("❓ Ông chủ muốn hỏi gì nè?")
+            await message.channel.send("❓ Đại ca muốn hỏi gì nè?")
             return
 
         await message.channel.send("🤖 ...")
