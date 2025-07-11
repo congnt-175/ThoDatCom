@@ -12,7 +12,6 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID"))
 CHANNEL_NAME = os.getenv("CHANNEL_NAME")
-OPENAI_API_KEY = "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"
 
 tz_vn = pytz.timezone("Asia/Ho_Chi_Minh")
 
